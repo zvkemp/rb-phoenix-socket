@@ -24,8 +24,7 @@ module Phoenix
       ensure_thread
       EM.next_tick { socket.send({ topic: topic, event: event, payload: payload, ref: ref }.to_json) }
       synchronize do
-        # TODO: timeout
-        inbox_cond.wait_until { inbox.key?(ref) }
+        inbox_cond.wait_until { inbox.key?(ref) || @dead }
         inbox.delete(ref) or raise "reply #{ref} not found"
       end
     end
@@ -37,11 +36,13 @@ module Phoenix
     def ensure_thread
       @ws_thread&.alive? or synchronize do
         spawn_thread
-        thread_ready.wait
+        thread_ready.wait(3)
+        raise 'dead connection timeout' if @dead
       end
     end
 
     def spawn_thread
+      @dead = false
       @ws_thread = Thread.new do
         EM.run do
           synchronize do
@@ -63,6 +64,11 @@ module Phoenix
             socket.on :close do |event|
               p [:close, event.code, event.reason]
               @socket = nil
+              @dead = true
+              synchronize do
+                inbox_cond.signal
+                thread_ready.signal
+              end
               EM::stop
             end
           end
