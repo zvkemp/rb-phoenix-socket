@@ -17,7 +17,7 @@ end
 ```
 
 ```ruby
-socket = Phoenix::Socket.new("words:default")
+socket = Phoenix::Socket.new("words:default", join_options: {}, path: 'ws://localhost:4000/socket/websocket')
 socket.request_reply(event: "word_list", payload: { user_id: 1 })
 # => {"topic"=>"words:default", "ref"=>"5d47b623", "payload"=>{"status"=>"ok", "response"=>{"words"=>["hummingbird", "puffleg"], "user_id"=>1}}, "join_ref"=>nil, "event"=>"phx_reply"}
 ```
