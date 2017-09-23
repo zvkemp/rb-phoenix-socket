@@ -1,5 +1,5 @@
 require "bundler/setup"
-require "rb/phoenix/socket"
+require "phoenix/socket"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
