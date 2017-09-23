@@ -1,5 +1,6 @@
 require "bundler/setup"
 require "phoenix/socket"
+require 'pry-byebug'
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
@@ -8,4 +9,10 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+end
+
+ENV['PHOENIX_HOST'] ||= begin
+  `docker-machine ip`.strip
+rescue Errno::ENOENT
+  'localhost'
 end

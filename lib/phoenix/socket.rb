@@ -1,6 +1,7 @@
 require "phoenix/socket/version"
 require 'faye/websocket'
 require 'eventmachine'
+require 'phoenix/inbox'
 require 'json'
 
 module Phoenix
@@ -13,7 +14,7 @@ module Phoenix
       @path = path
       @topic = topic
       @join_options = join_options
-      @inbox = {}
+      @inbox = Phoenix::Inbox.new(ttl: 15)
       super() # MonitorMixin
       @inbox_cond = new_cond
       @thread_ready = new_cond

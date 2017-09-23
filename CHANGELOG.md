@@ -1,3 +1,8 @@
+### 0.2.0
+
+- Added specs, backed by Phoenix app via docker-compose
+- Support timeout on requests
+
 ### 0.1.1
 
 Provide better threadsafety. This now works correctly:
