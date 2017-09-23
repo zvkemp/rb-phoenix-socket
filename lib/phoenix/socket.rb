@@ -21,6 +21,7 @@ module Phoenix
     end
 
     # Simulate a synchronous call over the websocket
+    # TODO: use a queue/inbox/outbox here instead
     def request_reply(event:, payload: {})
       ref = SecureRandom.uuid
       ensure_thread
@@ -36,12 +37,16 @@ module Phoenix
 
     attr_reader :inbox_cond, :thread_ready
 
+    def log(msg)
+      puts "[#{Thread.current[:id]}] #{msg}"
+    end
+
     def ensure_thread
       connection_alive? or synchronize do
         spawn_thread
         thread_ready.wait(3)
         if @dead
-          @spawning = false
+          @spawned = false
           raise 'dead connection timeout'
         end
       end
@@ -52,19 +57,17 @@ module Phoenix
     end
 
     def spawn_thread
-      return if @spawning
-      puts 'spawn_thread'
-      @spawning = true
+      return if @spawned || connection_alive?
+      @spawned = true
       @ws_thread = Thread.new do
+        Thread.current[:id] = "WSTHREAD_#{SecureRandom.hex(3)}"
         EM.run do
           synchronize do
             @socket = Faye::WebSocket::Client.new(path)
             socket.on :open do |event|
-              p [:open]
               socket.send({ topic: topic, event: "phx_join", payload: join_options, ref: @join_ref }.to_json)
               synchronize do
                 @dead     = false
-                @spawning = false
                 thread_ready.broadcast
               end
             end
@@ -77,13 +80,14 @@ module Phoenix
                   @topic_cond.broadcast
                 else
                   inbox[data['ref']] = data
+                  log(data)
                   inbox_cond.broadcast
                 end
               end
             end
 
             socket.on :close do |event|
-              p [:close, event.code, event.reason]
+              # p [:close, event.code, event.reason]
               synchronize do
                 @socket = nil
                 @dead = true

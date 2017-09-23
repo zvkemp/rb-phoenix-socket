@@ -1,0 +1,5 @@
+phoenix:
+  build: spec_example
+  ports:
+    - "4000:4000"
+  command: mix phoenix.server

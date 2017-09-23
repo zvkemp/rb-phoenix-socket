@@ -1,0 +1,5 @@
+# App artifacts
+/_build
+/db
+/deps
+/*.ez
