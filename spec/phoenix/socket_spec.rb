@@ -7,7 +7,7 @@ RSpec.describe Phoenix::Socket do
   end
 
   let(:socket_handler) do
-    Phoenix::Socket.new("rspec:default", path: "ws://#{`docker-machine ip`.strip}:4000/socket/websocket")
+    Phoenix::Socket.new("rspec:default", path: "ws://#{ENV.fetch('PHOENIX_HOST')}:4000/socket/websocket")
   end
 
   it 'echoes back the requested payload' do
