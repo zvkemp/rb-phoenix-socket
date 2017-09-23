@@ -18,19 +18,33 @@ module Phoenix
       @inbox_cond = new_cond
       @thread_ready = new_cond
       @topic_cond = new_cond
-      @join_ref = SecureRandom.uuid
+      reset_state_conditions
     end
 
     # Simulate a synchronous call over the websocket
     # TODO: use a queue/inbox/outbox here instead
-    def request_reply(event:, payload: {})
+    def request_reply(event:, payload: {}, timeout: 5) # timeout in seconds
       ref = SecureRandom.uuid
       synchronize do
         ensure_connection
         @topic_cond.wait_until { @topic_joined }
         EM.next_tick { socket.send({ topic: topic, event: event, payload: payload, ref: ref }.to_json) }
-        log [event, ref].inspect
-        inbox_cond.wait_until { inbox.key?(ref) || @dead }
+        log [event, ref]
+
+        # Ruby's condition variables only support timeout on the basic 'wait' method;
+        # This should behave roughly as if wait_until also support a timeout:
+        # `inbox_cond.wait_until(timeout) { inbox.key?(ref) || @dead }
+        #
+        # Note that this serves only to unblock the main thread, and should not halt execution of the
+        # socket connection. Therefore, there is a possibility that the inbox may pile up with
+        # unread messages if a lot of timeouts are encountered. A self-sweeping inbox will
+        # be implemented to prevent this.
+        ts = Time.now
+        loop do
+          inbox_cond.wait(timeout) # waits until time expires or signaled
+          break if inbox.key?(ref) || @dead
+          raise 'timeout' if timeout && Time.now > (ts + timeout)
+        end
         inbox.delete(ref) { raise "reply #{ref} not found" }
       end
     end
