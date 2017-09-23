@@ -3,7 +3,8 @@ language: ruby
 services: docker
 rvm:
   - 2.4.1
-before_install: gem install bundler
-before_script: docker-compose up --build -d
+before_install: 
+  - gem install bundler 
+  - docker-compose up --build -d
 env:
   - PHOENIX_HOST=localhost

@@ -20,9 +20,10 @@ RSpec.describe Phoenix::Socket do
   it 'handles concurrent threads' do
     # NOTE: This is a proof of concept, and is WAY more than anyone would ever want/need
     # to spawn in a runtime process. I.e. don't do this. If one at a time isn't enough,
-    # do it in Elixir. Although you should probably also ask yourself why you need 500 processes
+    # do it in Elixir. Although you should probably also ask yourself why you need 100 processes
     # to share a single websocket.
-    responses = (0..500).map do |n|
+    # ALSO NOTE: This used to be 500 but travis was choking on it
+    responses = (0..100).map do |n|
       Thread.new do
         Thread.current[:id] = n
         socket_handler.request_reply(event: :echo, payload: { n: n }, timeout: nil)
