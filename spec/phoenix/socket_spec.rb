@@ -7,7 +7,6 @@ RSpec.describe Phoenix::Socket do
   end
 
   let(:socket_handler) do
-    puts ENV['PHOENIX_HOST']
     Phoenix::Socket.new("rspec:default", path: "ws://#{ENV.fetch('PHOENIX_HOST')}:4000/socket/websocket")
   end
 
