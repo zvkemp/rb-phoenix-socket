@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/zvkemp/rb-phoenix-socket.svg?branch=master)](https://travis-ci.org/zvkemp/rb-phoenix-socket)
+
 # Phoenix::Socket
 
 Phoenix Channels websocket client wrapper for synchronous Ruby applications.
