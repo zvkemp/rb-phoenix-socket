@@ -7,6 +7,7 @@ RSpec.describe Phoenix::Socket do
   end
 
   let(:socket_handler) do
+    puts ENV['PHOENIX_HOST']
     Phoenix::Socket.new("rspec:default", path: "ws://#{ENV.fetch('PHOENIX_HOST')}:4000/socket/websocket")
   end
 
@@ -63,7 +64,7 @@ RSpec.describe Phoenix::Socket do
 
     specify 'sleep exceeding timeout' do
       expect { socket_handler.request_reply(timeout: 0.5, event: :sleep, payload: { ms: 1000 }) }.to raise_error(RuntimeError, /timeout/)
-      expect { socket_handler.request_reply(timeout: 0.5, event: :sleep, payload: { ms: 10 }) }.not_to raise_error(RuntimeError, /timeout/)
+      expect { socket_handler.request_reply(timeout: 0.5, event: :sleep, payload: { ms: 10 }) }.not_to raise_error
     end
   end
 end
