@@ -2,6 +2,8 @@ require 'pry-byebug'
 require "spec_helper"
 
 RSpec.describe Phoenix::Socket do
+  after { socket_handler.instance_exec { @socket&.close } }
+
   it "has a version number" do
     expect(Rb::Phoenix::Socket::VERSION).not_to be nil
   end
@@ -11,6 +13,7 @@ RSpec.describe Phoenix::Socket do
   end
 
   it 'echoes back the requested payload' do
+    # socket_handler.verbose = true
     response = socket_handler.request_reply(event: :echo, payload: { foo: :bar })
     expect(response['event']).to eq('phx_reply')
     expect(response['topic']).to eq('rspec:default')
@@ -41,12 +44,16 @@ RSpec.describe Phoenix::Socket do
       # behavior that came up during development. Generally came up at least 1 / 5 times;
       # running 20 for safety.
       it "handles termination but respawns the connection handler" do
+        # socket_handler.verbose = true
         expect { socket_handler.request_reply(event: :unsupported) }.to raise_error(RuntimeError, /reply .* not found/)
         expect(socket_handler.request_reply(event: :echo)['payload']['status']).to eq('ok')
 
         # Ensure dead handler threads have been cleaned up; we should have at most
         # the live main thread and a live respawned handler
         expect(Thread.list.count).to be < 3
+
+        # HOW TO AVOID THIS?
+        # socket_handler.instance_exec { @socket.close }
       end
     end
   end
@@ -63,8 +70,9 @@ RSpec.describe Phoenix::Socket do
     end
 
     specify 'sleep exceeding timeout' do
+      # socket_handler.verbose = true
       expect { socket_handler.request_reply(timeout: 0.5, event: :sleep, payload: { ms: 1000 }) }.to raise_error(RuntimeError, /timeout/)
-      expect { socket_handler.request_reply(timeout: 0.5, event: :sleep, payload: { ms: 10 }) }.not_to raise_error
+      expect { socket_handler.request_reply(timeout: 0.6, event: :sleep, payload: { ms: 1 }) }.not_to raise_error
     end
   end
 end

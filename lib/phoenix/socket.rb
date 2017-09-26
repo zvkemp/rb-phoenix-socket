@@ -1,6 +1,7 @@
 require "phoenix/socket/version"
-require 'faye/websocket'
-require 'eventmachine'
+require 'phoenix/socket_handler'
+# require 'faye/websocket'
+# require 'eventmachine'
 require 'phoenix/inbox'
 require 'json'
 
@@ -22,15 +23,26 @@ module Phoenix
       reset_state_conditions
     end
 
+    def d
+      # @verbose = true
+      request_reply(event: "words", payload: { user_id: 1 })
+    end
+
+    def self.verbose=(f)
+      super
+      @socket&.verbose = f
+    end
+
     # Simulate a synchronous call over the websocket
     # TODO: use a queue/inbox/outbox here instead
-    def request_reply(event:, payload: {}, timeout: 5) # timeout in seconds
+    def request_reply(event:, payload: {}, timeout: 1) # timeout in seconds
       ref = SecureRandom.uuid
       synchronize do
         ensure_connection
+        log "\e[31m WAITING #{event} #{ref}"
         @topic_cond.wait_until { @topic_joined }
-        EM.next_tick { socket.send({ topic: topic, event: event, payload: payload, ref: ref }.to_json) }
-        log [event, ref]
+        log "\e[31m#{event} #{ref}"
+        socket.send_data({ topic: topic, event: event, payload: payload, ref: ref }.to_json)
 
         # Ruby's condition variables only support timeout on the basic 'wait' method;
         # This should behave roughly as if wait_until also support a timeout:
@@ -42,11 +54,18 @@ module Phoenix
         # be implemented to prevent this.
         ts = Time.now
         loop do
+          log("\e[36mwaiting for #{ref}")
           inbox_cond.wait(timeout) # waits until time expires or signaled
           break if inbox.key?(ref) || @dead
-          raise 'timeout' if timeout && Time.now > (ts + timeout)
+          log("#{ref} checking timeout NOW:#{Time.now.to_f} TS:#{ts.to_f} TO:#{timeout} #{(ts + timeout).to_f}") if timeout
+          if timeout && Time.now > (ts + timeout)
+            socket&.socket&.flush
+            raise "#{ref} timeout"
+          end
         end
-        inbox.delete(ref) { raise "reply #{ref} not found" }
+        inbox.delete(ref) { raise "reply #{ref} not found" }.tap do |r|
+          log(r)
+        end
       end
     end
 
@@ -55,12 +74,13 @@ module Phoenix
     attr_reader :inbox_cond, :thread_ready
 
     def log(msg)
-      return unless @verbose
-      puts "[#{Thread.current[:id]}] #{msg} (#@topic_joined)"
+      return unless verbose
+      puts "\e[32m[#{Thread.current[:id]}][#{Time.now.to_f}] #{msg} (#@topic_joined)\e[0m"
     end
 
     def ensure_connection
       connection_alive? or synchronize do
+        log("ensure_connection")
         spawn_thread
         thread_ready.wait(3)
         if @dead
@@ -71,11 +91,13 @@ module Phoenix
     end
 
     def connection_alive?
-      @ws_thread&.alive? && !@dead
+      #@ws_thread&.alive? && !@dead
+      @socket&.open && !@dead
     end
 
-    def handle_close(event)
+    def handle_close(event = nil)
       synchronize do
+        @socket&.close(:skip_handler)
         reset_state_conditions
         inbox_cond.signal
         thread_ready.signal
@@ -92,20 +114,24 @@ module Phoenix
 
     def handle_message(event)
       data = JSON.parse(event.data)
-      log event.data
+      log "handling #{event.data}"
       synchronize do
         if data['event'] == 'phx_close'
           log('handling close from message')
           handle_close(event)
         elsif data['ref'] == @join_ref && data['event'] == 'phx_error'
           # NOTE: For some reason, on errors phx will send the join ref instead of the message ref
+          log("\e[31mBROADCAST")
           inbox_cond.broadcast
         elsif data['ref'] == @join_ref
           log ['join_ref', @join_ref]
           @topic_joined = true
+          log("\e[31mTOPICJOIN")
           @topic_cond.broadcast
+          thread_ready.broadcast
         else
           inbox[data['ref']] = data
+          log("\e[31mBROADCAST")
           inbox_cond.broadcast
         end
       end
@@ -113,7 +139,7 @@ module Phoenix
 
     def handle_open(event)
       log 'open'
-      socket.send({ topic: topic, event: "phx_join", payload: join_options, ref: @join_ref, join_ref: @join_ref }.to_json)
+      socket.send_data({ topic: topic, event: "phx_join", payload: join_options, ref: @join_ref, join_ref: @join_ref }.to_json)
       synchronize do
         @dead     = false
         thread_ready.broadcast
@@ -124,26 +150,22 @@ module Phoenix
       return if @spawned || connection_alive?
       log 'spawning...'
       @spawned = true
-      @ws_thread = Thread.new do
-        Thread.current[:id] = "WSTHREAD_#{SecureRandom.hex(3)}"
-        EM.run do
-          synchronize do
-            log 'em.run.sync'
-            @socket = Faye::WebSocket::Client.new(path)
-            socket.on :open do |event|
-              handle_open(event)
-            end
-
-            socket.on :message do |event|
-              handle_message(event)
-            end
-
-            socket.on :close do |event|
-              log [:close, event.code, event.reason]
-              handle_close(event)
-              EM::stop
-            end
+      synchronize do
+        begin
+          log 'new socket'
+          @socket = Phoenix::SocketHandler.new(path)
+          @socket.verbose = verbose
+          @socket.handle_message do |msg|
+            # puts msg.data
+            handle_message(msg)
           end
+
+          @socket.handle_close { handle_close(nil) }
+
+          handle_open(nil)
+        rescue
+          reset_state_conditions
+          raise
         end
       end
     end
