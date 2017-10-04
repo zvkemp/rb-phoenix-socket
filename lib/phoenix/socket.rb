@@ -3,6 +3,8 @@ require 'faye/websocket'
 require 'eventmachine'
 require 'phoenix/inbox'
 require 'json'
+require 'cgi'
+require 'uri'
 
 module Phoenix
   class Socket

@@ -11,9 +11,6 @@ RSpec.configure do |config|
   end
 end
 
-Thread.report_on_exception = true
-Thread.abort_on_exception = true
-
 ENV['PHOENIX_HOST'] ||= begin
   `docker-machine ip`.strip
 rescue Errno::ENOENT
