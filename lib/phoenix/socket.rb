@@ -7,13 +7,14 @@ require 'json'
 module Phoenix
   class Socket
     include MonitorMixin
-    attr_reader :path, :socket, :inbox, :topic, :join_options
-    attr_accessor :verbose
+    attr_reader :path, :socket, :inbox, :topic
+    attr_accessor :verbose, :join_options_proc, :connect_options_proc
 
-    def initialize(topic, join_options: {}, path: 'ws://localhost:4000/socket/websocket')
+    def initialize(topic, join_options: {}, connect_options: {}, path: 'ws://localhost:4000/socket/websocket')
       @path = path
       @topic = topic
       @join_options = join_options
+      @connect_options = connect_options
       @inbox = Phoenix::Inbox.new(ttl: 15)
       super() # MonitorMixin
       @inbox_cond = new_cond
@@ -48,6 +49,16 @@ module Phoenix
         end
         inbox.delete(ref) { raise "reply #{ref} not found" }
       end
+    end
+
+    def join_options
+      return @join_options unless join_options_proc
+      join_options_proc.call(@join_options)
+    end
+
+    def connect_options
+      return @connect_options unless connect_options_proc
+      connect_options_proc.call(@connect_options)
     end
 
     private
@@ -120,6 +131,13 @@ module Phoenix
       end
     end
 
+    def build_path
+      uri = URI.parse(path)
+      existing_query = CGI.parse(uri.query || '')
+      uri.query = URI.encode_www_form(existing_query.merge(connect_options))
+      uri.to_s
+    end
+
     def spawn_thread
       return if @spawned || connection_alive?
       log 'spawning...'
@@ -129,7 +147,7 @@ module Phoenix
         EM.run do
           synchronize do
             log 'em.run.sync'
-            @socket = Faye::WebSocket::Client.new(path)
+            @socket = Faye::WebSocket::Client.new(build_path)
             socket.on :open do |event|
               handle_open(event)
             end
