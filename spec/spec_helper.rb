@@ -29,6 +29,8 @@ class DockerHostDetector
         return nil
       end
     end
+  rescue Errno::ENOENT
+    nil
   end
 end
 
