@@ -11,8 +11,29 @@ RSpec.configure do |config|
   end
 end
 
-ENV['PHOENIX_HOST'] ||= begin
-  `docker-machine ip`.strip
-rescue Errno::ENOENT
-  'localhost'
+class DockerHostDetector
+  def initialize(system_command)
+    @system_command = system_command
+  end
+
+  def to_s
+    @to_s ||= exec&.strip
+  end
+
+  private
+
+  def exec
+    `#@system_command`.tap do
+      unless $?.success?
+        puts "`#@system_command` not available."
+        return nil
+      end
+    end
+  end
 end
+
+ENV['PHOENIX_HOST'] ||= [
+  DockerHostDetector.new('docker-machine ip'),
+  DockerHostDetector.new('boot2docker ip'),
+  '0.0.0.0'
+].lazy.map(&:to_s).detect(&:itself)
